@@ -1,0 +1,219 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+
+from torchtext.datasets import TranslationDataset, Multi30k
+from torchtext.data import Field, BucketIterator
+
+import spacy
+import numpy as np
+
+import random
+import math
+import time
+import os
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__),'../modules/'))
+sys.path.append(os.path.join(os.path.dirname(__file__),'../'))
+
+from torchtext.data.metrics import bleu_score
+
+import Encoder.cnn_encoder
+import Decoder.cnn_decoder
+import models.CNN_Seq2Seq
+
+import en_core_web_sm
+import de_core_news_sm
+
+
+
+
+def evaluate(model, iterator, objective):
+
+    model.eval()
+
+    epoch_loss = 0
+
+    with torch.no_grad():
+
+        for i, batch in enumerate(iterator):
+
+            english = batch.src
+            german = batch.trg
+
+            output, _ = model(english, german[:,:-1])
+
+
+            output_dim = output.shape[-1]
+
+            output = output.contiguous().view(-1, output_dim)
+            german = german[:,1:].contiguous().view(-1)
+
+
+            loss = objective(output, german)
+
+            epoch_loss += loss.item()
+
+    return epoch_loss / len(iterator)
+
+
+
+def translate_sentence(sentence, source, target, model, device):
+
+    model.eval()
+
+    if isinstance(sentence, str):
+        nlp = spacy.load('de')
+        tokens = [token.text.lower() for token in nlp(sentence)]
+    else:
+        tokens = [token.lower() for token in sentence]
+
+    tokens = [source.init_token] + tokens + [source.eos_token]
+
+    with torch.no_grad():
+        encoder_conved, encoder_combined = model.encoder(torch.LongTensor([source.vocab.stoi[token] for token in tokens]).unsqueeze(0).to(device))
+
+    target_index = [target.vocab.stoi[target.init_token]]
+
+    for i in range(100):
+        with torch.no_grad():
+            output, _ = model.decoder(torch.LongTensor(target_index).unsqueeze(0).to(device), encoder_conved, encoder_combined)
+
+        translated_word = output.argmax(2)[:,-1].item()
+
+        target_index.append(translated_word)
+
+        if translated_word == target.vocab.stoi[target.eos_token]:
+            break
+
+    translated_sent = [target.vocab.itos[i] for i in target_index]
+
+    return translated_sent[1:]
+
+
+def calculate_bleu(data, source, target, model, device):
+    words = []
+    answer = []
+    for d in data:
+
+        english = vars(d)['src']
+        german = vars(d)['trg']
+        translated = translate_sentence(english, source, target, model, device)
+        answer.append(translated[:-1])
+        words.append([german])
+
+    return bleu_score(answer, words)
+
+
+def main():
+
+    SEED = 1234
+
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    torch.cuda.manual_seed(SEED)
+    torch.backends.cudnn.deterministic = True
+    spacy_de = spacy.load('de')
+    spacy_en = spacy.load('en')
+    
+    # spacy_de = de_core_news_sm.load()
+    # spacy_en = en_core_web_sm.load()
+
+    def helper_german(text):
+
+        return [tok.text for tok in spacy_de.tokenizer(text)]
+
+    def helper_english(text):
+
+        return [tok.text for tok in spacy_en.tokenizer(text)]
+
+
+    english = Field(tokenize = helper_german,init_token = '<sos>',eos_token = '<eos>',lower = True,batch_first = True)
+
+    german = Field(tokenize = helper_english,init_token = '<sos>',eos_token = '<eos>',lower = True,batch_first = True)
+
+    train_data, valid_data, test_data = Multi30k.splits(exts=('.de', '.en'), fields=(english, german))
+
+
+    english.build_vocab(train_data, min_freq = 2)
+    german.build_vocab(train_data, min_freq = 2)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    train_iterator, valid_iterator, test_iterator = BucketIterator.splits((train_data, valid_data, test_data),batch_size = 128,device = device)
+
+    input_dimension = len(english.vocab)
+    output_dimension = len(german.vocab)
+    german_pad = german.vocab.stoi[german.pad_token]
+
+    enc = Encoder.cnn_encoder.CNN_Encoder(input_dimension, 256, 512, 10, 0.2, device)
+    dec = Decoder.cnn_decoder.CNN_Decoder(output_dimension, 256, 512, 10, 0.2, german_pad, device)
+
+    model = models.CNN_Seq2Seq.CNN_Seq2Seq(enc, dec).to(device)
+
+    optimizer = optim.Adam(model.parameters())
+
+
+    objective = nn.CrossEntropyLoss(ignore_index = german_pad)
+
+    best_validation_loss = float('inf')
+
+    for epoch in range(8):
+
+        model.train()
+
+        epoch_loss = 0
+
+        for i, batch in enumerate(train_iterator):
+
+            english = batch.src
+            german = batch.trg
+
+            optimizer.zero_grad()
+
+            output, _ = model(english, german[:,:-1])
+
+            output_dim = output.shape[-1]
+
+            output = output.contiguous().view(-1, output_dim)
+            german = german[:,1:].contiguous().view(-1)
+
+            loss = objective(output, german)
+
+            loss.backward()
+
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
+
+            optimizer.step()
+
+            epoch_loss += loss.item()
+
+        train_loss = epoch_loss / len(train_iterator)
+
+        valid_loss = evaluate(model, valid_iterator, objective)
+
+        if valid_loss < best_validation_loss:
+            best_validation_loss = valid_loss
+            torch.save(model.state_dict(), 'cnn_mtlstm_model.pt')
+
+        print("Epoch: "+ str(epoch+1))
+        print("Train Loss: "+ str(train_loss))
+        print("Validation Loss: "+ str(valid_loss))
+
+
+    model.load_state_dict(torch.load('cnn_mtlstm_model.pt'))
+
+    test_loss = evaluate(model, test_iterator, objective)
+
+    print("Test Loss:"+ str(test_loss))
+
+    #bleu_score = calculate_bleu(test_data, english, german, model, device)
+
+    #print("BLEU score= " + str((bleu_score*100)))
+
+
+
+if __name__ == '__main__':
+    main()
