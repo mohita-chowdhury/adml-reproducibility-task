@@ -20,19 +20,13 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 
 class CNN_Decoder(nn.Module):
-    def __init__(self,
-                 output_dimension,
-                 embedding_dimension,
-                 hidden_output_dimension,
-                 convolution_layers,
-                 dropout,
-                 padding_tok,
-                 device):
+    def __init__(self, output_dimension, embedding_dimension, hidden_output_dimension, convolution_layers, dropout, padding_tok, device):
 
         super().__init__()
 
         self.padding_tok = padding_tok
         self.device = device
+        self.covolution_modules_layer = nn.ModuleList([nn.Conv1d(in_channels = hidden_output_dimension,out_channels = 2 * hidden_output_dimension,kernel_size = 3) for _ in range(convolution_layers)])
 
         self.scale = torch.sqrt(torch.FloatTensor([0.5])).to(device)
 
@@ -47,11 +41,6 @@ class CNN_Decoder(nn.Module):
 
         self.fc_out = nn.Linear(embedding_dimension, output_dimension)
 
-
-        self.covolution_modules_layer = nn.ModuleList([nn.Conv1d(in_channels = hidden_output_dimension,
-                                              out_channels = 2 * hidden_output_dimension,
-                                              kernel_size = 3)
-                                    for _ in range(convolution_layers)])
 
         self.dropout = nn.Dropout(dropout)
 

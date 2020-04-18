@@ -59,52 +59,6 @@ def evaluate(model, iterator, objective):
 
 
 
-def translate_sentence(sentence, source, target, model, device):
-
-    model.eval()
-
-    if isinstance(sentence, str):
-        nlp = spacy.load('de')
-        tokens = [token.text.lower() for token in nlp(sentence)]
-    else:
-        tokens = [token.lower() for token in sentence]
-
-    tokens = [source.init_token] + tokens + [source.eos_token]
-
-    with torch.no_grad():
-        encoder_conved, encoder_combined = model.encoder(torch.LongTensor([source.vocab.stoi[token] for token in tokens]).unsqueeze(0).to(device))
-
-    target_index = [target.vocab.stoi[target.init_token]]
-
-    for i in range(100):
-        with torch.no_grad():
-            output, _ = model.decoder(torch.LongTensor(target_index).unsqueeze(0).to(device), encoder_conved, encoder_combined)
-
-        translated_word = output.argmax(2)[:,-1].item()
-
-        target_index.append(translated_word)
-
-        if translated_word == target.vocab.stoi[target.eos_token]:
-            break
-
-    translated_sent = [target.vocab.itos[i] for i in target_index]
-
-    return translated_sent[1:]
-
-
-def calculate_bleu(data, source, target, model, device):
-    words = []
-    answer = []
-    for d in data:
-
-        english = vars(d)['src']
-        german = vars(d)['trg']
-        translated = translate_sentence(english, source, target, model, device)
-        answer.append(translated[:-1])
-        words.append([german])
-
-    return bleu_score(answer, words)
-
 
 def main():
 
@@ -117,7 +71,7 @@ def main():
     torch.backends.cudnn.deterministic = True
     spacy_de = spacy.load('de')
     spacy_en = spacy.load('en')
-    
+
     # spacy_de = de_core_news_sm.load()
     # spacy_en = en_core_web_sm.load()
 
@@ -209,9 +163,6 @@ def main():
 
     print("Test Loss:"+ str(test_loss))
 
-    #bleu_score = calculate_bleu(test_data, english, german, model, device)
-
-    #print("BLEU score= " + str((bleu_score*100)))
 
 
 
