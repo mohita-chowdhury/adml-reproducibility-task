@@ -39,14 +39,6 @@ class CNN_Encoder(nn.Module):
 
         c_list = []
 
-        for i in range(convolution_layers):
-            c_list.append(nn.Conv1d(in_channels = hidden_output_dimension,out_channels = 2 * hidden_output_dimension,kernel_size = 3))
-
-        self.covolution_modules_layer = nn.ModuleList([nn.Conv1d(in_channels = hidden_output_dimension,
-                                              out_channels = 2 * hidden_output_dimension,
-                                              kernel_size = 3,
-                                              padding = (3 - 1) // 2)
-                                    for _ in range(convolution_layers)])
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, src):
