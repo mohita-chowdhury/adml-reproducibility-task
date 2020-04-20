@@ -25,8 +25,7 @@ class CNN_Sent_Class(nn.Module):
 
         self.dropout = nn.Dropout(0.3)
         self.fully_connected = nn.Linear(300, 5)
-        self.outputs_both_layer_cove_with_glove = MTLSTM(n_vocab=None, vectors=None, layer0=True, residual_embeddings=True)
-        self.outputs_both_layer_cove_with_glove.cuda()
+
 
 
 
@@ -36,8 +35,11 @@ class CNN_Sent_Class(nn.Module):
         x = self.embed(x)
 
 
+
         if (self.cove):
-            x = self.outputs_both_layer_cove_with_glove(x,[x.shape[1]]*x.shape[0])
+            outputs_both_layer_cove_with_glove = MTLSTM(n_vocab=None, vectors=None, layer0=True, residual_embeddings=True)
+            outputs_both_layer_cove_with_glove.cuda()
+            x = outputs_both_layer_cove_with_glove(x,[x.shape[1]]*x.shape[0])
 
         x = x.unsqueeze(1)
 
