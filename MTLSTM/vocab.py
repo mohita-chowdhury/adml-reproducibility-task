@@ -2,7 +2,7 @@
 '''
     This file has been used from the github repository, as manner in which of the data is processed affected the
     performance of the model, even if the model's architecture was indentical. As such, the effect wasn't a lot, but we
-    saw an improvement if we used the preprocessed data.
+    saw an improvement if we used this preprocessed data.
 
 '''
 

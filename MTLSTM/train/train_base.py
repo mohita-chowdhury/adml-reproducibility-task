@@ -21,7 +21,6 @@ import torch.nn.utils
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
-from utils import read_corpus, batch_iter
 from vocab import Vocab, VocabEntry
 
 import Encoder.lstm_encoder
@@ -29,7 +28,33 @@ import Decoder.lstm_decoder
 import models.RNN_Seq2Seq
 
 
+#  Corpus reader method used as-is from online tutorial on PyTorch
+def read_corpus(spath, source):
+    sentences = []
+    for line in open(spath):
+        sentence = line.strip().split(' ')
+        if source == 'tgt':
+            sentence = ['<s>'] + sentence + ['</s>']
+        sentences.append(sentence)
 
+    return sentences
+
+
+#  Batch iteration generator method used as-is from online tutorial on PyTorch
+def batch_iter(data, batch_size):
+    batch_num = math.ceil(len(data) / batch_size)
+    ind = list(range(len(data)))
+
+    np.random.shuffle(ind)
+
+    for i in range(batch_num):
+        indices = ind[i * batch_size: (i + 1) * batch_size]
+        examples = [data[idx] for idx in indices]
+        examples = sorted(examples, key=lambda e: len(e[0]), reverse=True)
+        src_sents = [e[0] for e in examples]
+        tgt_sents = [e[1] for e in examples]
+
+        yield src_sents, tgt_sents
 
 
 
@@ -77,14 +102,13 @@ def train(args):
 
 
     model = model.to(device)
-
+    print('Begin training')
     optimizer = torch.optim.Adam(model.parameters(), lr=0.2)
-    last_perplexity = 0.
-    train_iter = patience = 0
+    last_perplexity = 0.0
+    train_iter = 0
     epoch = 0
     validation_history = []
-    train_time = begin_time = time.time()
-    print('Begin training')
+
 
     epochs = 4
 
@@ -94,7 +118,7 @@ def train(args):
         if (epoch == epochs):
             print('Training Stopped')
             exit(0)
-        for english_sentencees, german_sentencees in batch_iter(train, batch_size=128, shuffle=True):
+        for english_sentencees, german_sentencees in batch_iter(train, batch_size=128):
             train_iter += 1
 
             optimizer.zero_grad()
@@ -118,7 +142,6 @@ def train(args):
 
 
         if validation_improved:
-            patience = 0
             model.save(spath)
             torch.save(optimizer.state_dict(), spath + '.optim')
 
