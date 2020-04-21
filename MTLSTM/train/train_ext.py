@@ -39,19 +39,19 @@ def evaluate(model, iterator, objective):
 
         for i, batch in enumerate(iterator):
 
-            english = batch.src
-            german = batch.trg
+            german = batch.src
+            english = batch.trg
 
-            output, _ = model(english, german[:,:-1])
+            output, _ = model(german, english[:,:-1])
 
 
             output_dim = output.shape[-1]
 
             output = output.contiguous().view(-1, output_dim)
-            german = german[:,1:].contiguous().view(-1)
+            english = english[:,1:].contiguous().view(-1)
 
 
-            loss = objective(output, german)
+            loss = objective(output, english)
 
             epoch_loss += loss.item()
 
@@ -84,33 +84,33 @@ def main():
         return [tok.text for tok in spacy_en.tokenizer(text)]
 
 
-    english = Field(tokenize = helper_german,init_token = '<sos>',eos_token = '<eos>',lower = True,batch_first = True)
+    german = Field(tokenize = helper_german,init_token = '<sos>',eos_token = '<eos>',lower = True,batch_first = True)
 
-    german = Field(tokenize = helper_english,init_token = '<sos>',eos_token = '<eos>',lower = True,batch_first = True)
+    english = Field(tokenize = helper_english,init_token = '<sos>',eos_token = '<eos>',lower = True,batch_first = True)
 
-    train_data, valid_data, test_data = Multi30k.splits(exts=('.de', '.en'), fields=(english, german))
+    train_data, valid_data, test_data = Multi30k.splits(exts=('.de', '.en'), fields=(german, english))
 
 
-    english.build_vocab(train_data, min_freq = 2)
     german.build_vocab(train_data, min_freq = 2)
+    english.build_vocab(train_data, min_freq = 2)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     train_iterator, valid_iterator, test_iterator = BucketIterator.splits((train_data, valid_data, test_data),batch_size = 128,device = device)
 
-    input_dimension = len(english.vocab)
-    output_dimension = len(german.vocab)
-    german_pad = german.vocab.stoi[german.pad_token]
+    input_dimension = len(german.vocab)
+    output_dimension = len(english.vocab)
+    ignore_pad = english.vocab.stoi[english.pad_token]
 
     enc = Encoder.cnn_encoder.CNN_Encoder(input_dimension, 256, 512, 10, 0.2, device)
-    dec = Decoder.cnn_decoder.CNN_Decoder(output_dimension, 256, 512, 10, 0.2, german_pad, device)
+    dec = Decoder.cnn_decoder.CNN_Decoder(output_dimension, 256, 512, 10, 0.2, ignore_pad, device)
 
     model = models.CNN_Seq2Seq.CNN_Seq2Seq(enc, dec).to(device)
 
     optimizer = optim.Adam(model.parameters())
 
 
-    objective = nn.CrossEntropyLoss(ignore_index = german_pad)
+    objective = nn.CrossEntropyLoss(ignore_index = ignore_pad)
 
     best_validation_loss = float('inf')
 
@@ -122,19 +122,19 @@ def main():
 
         for i, batch in enumerate(train_iterator):
 
-            english = batch.src
-            german = batch.trg
+            german = batch.src
+            english = batch.trg
 
             optimizer.zero_grad()
 
-            output, _ = model(english, german[:,:-1])
+            output, _ = model(german, english[:,:-1])
 
             output_dim = output.shape[-1]
 
             output = output.contiguous().view(-1, output_dim)
-            german = german[:,1:].contiguous().view(-1)
+            english = english[:,1:].contiguous().view(-1)
 
-            loss = objective(output, german)
+            loss = objective(output, english)
 
             loss.backward()
 
