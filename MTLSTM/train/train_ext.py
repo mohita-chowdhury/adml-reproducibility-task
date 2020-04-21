@@ -102,8 +102,8 @@ def main():
     output_dimension = len(english.vocab)
     ignore_pad = english.vocab.stoi[english.pad_token]
 
-    enc = Encoder.cnn_encoder.CNN_Encoder(input_dimension, 256, 512, 10, 0.2, device)
-    dec = Decoder.cnn_decoder.CNN_Decoder(output_dimension, 256, 512, 10, 0.2, ignore_pad, device)
+    enc = Encoder.cnn_encoder.CNN_Encoder(input_dimension, 300, 600, 5, 0.2, device)
+    dec = Decoder.cnn_decoder.CNN_Decoder(output_dimension, 300, 600, 5, 0.2, ignore_pad, device)
 
     model = models.CNN_Seq2Seq.CNN_Seq2Seq(enc, dec).to(device)
 
