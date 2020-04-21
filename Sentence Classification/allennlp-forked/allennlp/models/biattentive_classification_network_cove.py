@@ -239,8 +239,8 @@ class BiattentiveClassificationNetwork(Model):
         # While using embeddings from the mt-cnn encoder
         if cnn:
             embedded_text_cnn = embedded_text
-            enc = Encoder(7855, 256, 512, 10, 3, 0.25, 'cuda')
-            dec = Decoder(5893, 256, 512, 10, 3, 0.25, 1, 'cuda')
+            enc = Encoder(7855, 300, 600, 5, 3, 0.25, 'cuda')
+            dec = Decoder(5893, 300, 600, 5, 3, 0.25, 1, 'cuda')
 
             cnn_model = Seq2Seq(enc, dec).cuda()
             cnn_model.load_state_dict(torch.load('../cnn_lstm_model.pt'))
